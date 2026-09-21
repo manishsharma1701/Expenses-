@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Daily Expense Tracker</title>
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --border: #e2e8f0;
+      --success: #10b981;
+      --tag-bg: #f1f5f9;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text-main);
+      padding: 1rem;
+      padding-bottom: 5rem;
+      max-width: 480px;
+      margin: 0 auto;
+    }
+
+    header {
+      margin-bottom: 1.25rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+
+    h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+    }
+
+    .period-badge {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    /* Summary Card */
+    .summary-card {
+      background: linear-gradient(135deg, #1e3a8a, #2563eb);
+      color: #ffffff;
+      padding: 1.25rem;
+      border-radius: 1rem;
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.25);
+      margin-bottom: 1.25rem;
+    }
+
+    .summary-title {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      opacity: 0.85;
+      margin-bottom: 0.35rem;
+    }
+
+    .summary-total {
+      font-size: 2rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    /* Form Container */
+    .form-card {
+      background: var(--card-bg);
+      padding: 1.15rem;
+      border-radius: 1rem;
+      border: 1px solid var(--border);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+      margin-bottom: 1.25rem;
+    }
+
+    .form-group {
+      margin-bottom: 0.85rem;
+    }
+
+    label {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 0.35rem;
+      text-transform: uppercase;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 0.75rem 0.85rem;
+      border-radius: 0.6rem;
+      border: 1px solid var(--border);
+      font-size: 1rem;
+      background: #ffffff;
+      color: var(--text-main);
+      outline: none;
+    }
+
+    input:focus, select:focus {
+      border-color: var(--primary);
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+
+    button.btn-add {
+      width: 100%;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      padding: 0.85rem;
+      font-size: 1rem;
+      font-weight: 600;
+      border-radius: 0.6rem;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+    }
+
+    button.btn-add:active {
+      background: var(--primary-hover);
+      transform: scale(0.99);
+    }
+
+    /* Category Breakdown */
+    .breakdown-card {
+      background: var(--card-bg);
+      padding: 1rem;
+      border-radius: 1rem;
+      border: 1px solid var(--border);
+      margin-bottom: 1.25rem;
+    }
+
+    .card-heading {
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin-bottom: 0.75rem;
+    }
+
+    .progress-item {
+      margin-bottom: 0.65rem;
+    }
+
+    .progress-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      font-weight: 500;
+      margin-bottom: 0.25rem;
+    }
+
+    .progress-bar-bg {
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--primary);
+      border-radius: 3px;
+    }
+
+    /* List */
+    .history-card {
+      background: var(--card-bg);
+      border-radius: 1rem;
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    .history-header {
+      padding: 0.85rem 1rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .tx-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.85rem 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .tx-item:last-child {
+      border-bottom: none;
+    }
+
+    .tx-left {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+    }
+
+    .tx-category {
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+
+    .tx-details {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .tx-right {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .tx-amount {
+      font-size: 1rem;
+      font-weight: 700;
+    }
+
+    .btn-delete {
+      background: none;
+      border: none;
+      color: #94a3b8;
+      cursor: pointer;
+      font-size: 1.1rem;
+      line-height: 1;
+      padding: 0.2rem;
+    }
+
+    .btn-delete:hover {
+      color: #ef4444;
+    }
+
+    .empty-state {
+      padding: 2rem 1rem;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+
+    .actions-row {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+
+    .btn-secondary {
+      flex: 1;
+      background: var(--tag-bg);
+      color: var(--text-main);
+      border: 1px solid var(--border);
+      padding: 0.65rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      border-radius: 0.5rem;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>TrackWise</h1>
+    <div class="period-badge" id="currentMonthYear"></div>
+  </header>
+
+  <!-- Summary Card -->
+  <div class="summary-card">
+    <div class="summary-title">Total Spent This Month</div>
+    <div class="summary-total" id="monthlyTotalDisplay">₹0</div>
+  </div>
+
+  <!-- Entry Form -->
+  <div class="form-card">
+    <form id="expenseForm">
+      <div class="grid-2">
+        <div class="form-group">
+          <label for="amount">Amount (₹)</label>
+          <input type="number" id="amount" placeholder="e.g. 150" step="any" inputmode="decimal" required />
+        </div>
+        <div class="form-group">
+          <label for="category">Category</label>
+          <select id="category" required>
+            <option value="Food & Dining">Food & Dining</option>
+            <option value="Groceries">Groceries</option>
+            <option value="Commute & Travel">Commute & Travel</option>
+            <option value="Shopping">Shopping</option>
+            <option value="Bills & Utilities">Bills & Utilities</option>
+            <option value="Entertainment">Entertainment</option>
+            <option value="Health">Health</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="form-group">
+          <label for="payment">Mode</label>
+          <select id="payment">
+            <option value="UPI">UPI</option>
+            <option value="Card">Card</option>
+            <option value="Cash">Cash</option>
+            <option value="NetBanking">Net Banking</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="date">Date</label>
+          <input type="date" id="date" required />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="note">Note (Optional)</label>
+        <input type="text" id="note" placeholder="e.g. Swiggy lunch, metro recharge" />
+      </div>
+
+      <button type="submit" class="btn-add">+ Add Expense</button>
+    </form>
+  </div>
+
+  <!-- Category Breakdown -->
+  <div class="breakdown-card">
+    <div class="card-heading">Category Breakdown (This Month)</div>
+    <div id="breakdownContainer">
+      <div class="empty-state">No expenses recorded for this month yet.</div>
+    </div>
+  </div>
+
+  <!-- Recent Entries -->
+  <div class="history-card">
+    <div class="history-header">
+      <span class="card-heading" style="margin: 0;">Recent Logs</span>
+      <span style="font-size: 0.75rem; color: var(--text-muted);" id="txCount">0 items</span>
+    </div>
+    <div id="historyList">
+      <div class="empty-state">No entries added yet.</div>
+    </div>
+  </div>
+
+  <!-- Export / Clear Options -->
+  <div class="actions-row">
+    <button type="button" class="btn-secondary" onclick="exportToCSV()">Export to CSV</button>
+    <button type="button" class="btn-secondary" onclick="clearAllData()" style="color: #ef4444;">Clear All Data</button>
+  </div>
+
+  <script>
+    const STORAGE_KEY = "trackwise_expenses_v1";
+
+    function loadExpenses() {
+      const data = localStorage.getItem(STORAGE_KEY);
+      return data ? JSON.parse(data) : [];
+    }
+
+    function saveExpenses(expenses) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(expenses));
+    }
+
+    function formatINR(val) {
+      return "₹" + Number(val).toLocaleString("en-IN", {
+        maximumFractionDigits: 2,
+        minimumFractionDigits: 0
+      });
+    }
+
+    // Set default date to today
+    const dateInput = document.getElementById("date");
+    const today = new Date();
+    dateInput.value = today.toISOString().split("T")[0];
+
+    // Set Month Year banner
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    document.getElementById("currentMonthYear").textContent = `${monthNames[today.getMonth()]} ${today.getFullYear()}`;
+
+    function render() {
+      const expenses = loadExpenses();
+      const currentYear = today.getFullYear();
+      const currentMonth = today.getMonth();
+
+      // Filter for this month
+      const currentMonthExpenses = expenses.filter(item => {
+        const itemDate = new Date(item.date);
+        return itemDate.getFullYear() === currentYear && itemDate.getMonth() === currentMonth;
+      });
+
+      // Compute Total
+      const monthlyTotal = currentMonthExpenses.reduce((acc, curr) => acc + Number(curr.amount), 0);
+      document.getElementById("monthlyTotalDisplay").textContent = formatINR(monthlyTotal);
+
+      // Render Breakdown
+      const categoryMap = {};
+      currentMonthExpenses.forEach(item => {
+        categoryMap[item.category] = (categoryMap[item.category] || 0) + Number(item.amount);
+      });
+
+      const breakdownContainer = document.getElementById("breakdownContainer");
+      if (Object.keys(categoryMap).length === 0) {
+        breakdownContainer.innerHTML = `<div class="empty-state">No expenses recorded for this month yet.</div>`;
+      } else {
+        const sortedCats = Object.entries(categoryMap).sort((a, b) => b[1] - a[1]);
+        breakdownContainer.innerHTML = sortedCats.map(([cat, amount]) => {
+          const pct = monthlyTotal > 0 ? Math.round((amount / monthlyTotal) * 100) : 0;
+          return `
+            <div class="progress-item">
+              <div class="progress-meta">
+                <span>${cat}</span>
+                <span>${formatINR(amount)} (${pct}%)</span>
+              </div>
+              <div class="progress-bar-bg">
+                <div class="progress-bar-fill" style="width: ${pct}%;"></div>
+              </div>
+            </div>
+          `;
+        }).join("");
+      }
+
+      // Render History (latest 20 entries)
+      const historyList = document.getElementById("historyList");
+      document.getElementById("txCount").textContent = `${expenses.length} total`;
+
+      if (expenses.length === 0) {
+        historyList.innerHTML = `<div class="empty-state">No entries added yet.</div>`;
+      } else {
+        // Sort descending by date
+        const sorted = [...expenses].sort((a, b) => new Date(b.date) - new Date(a.date));
+        historyList.innerHTML = sorted.slice(0, 20).map(item => `
+          <div class="tx-item">
+            <div class="tx-left">
+              <span class="tx-category">${item.category}</span>
+              <span class="tx-details">${item.date} • ${item.payment}${item.note ? " • " + escapeHtml(item.note) : ""}</span>
+            </div>
+            <div class="tx-right">
+              <span class="tx-amount">${formatINR(item.amount)}</span>
+              <button class="btn-delete" title="Delete" onclick="deleteExpense('${item.id}')">&times;</button>
+            </div>
+          </div>
+        `).join("");
+      }
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    // Add Expense
+    document.getElementById("expenseForm").addEventListener("submit", function(e) {
+      e.preventDefault();
+      const amount = parseFloat(document.getElementById("amount").value);
+      const category = document.getElementById("category").value;
+      const payment = document.getElementById("payment").value;
+      const date = document.getElementById("date").value;
+      const note = document.getElementById("note").value.trim();
+
+      if (!amount || isNaN(amount) || amount <= 0) {
+        alert("Please enter a valid amount.");
+        return;
+      }
+
+      const newExpense = {
+        id: "tx_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5),
+        amount,
+        category,
+        payment,
+        date,
+        note
+      };
+
+      const expenses = loadExpenses();
+      expenses.push(newExpense);
+      saveExpenses(expenses);
+
+      // Reset form fields
+      document.getElementById("amount").value = "";
+      document.getElementById("note").value = "";
+      document.getElementById("amount").focus();
+
+      render();
+    });
+
+    window.deleteExpense = function(id) {
+      const expenses = loadExpenses().filter(item => item.id !== id);
+      saveExpenses(expenses);
+      render();
+    };
+
+    window.clearAllData = function() {
+      if (confirm("Are you sure you want to delete all stored expense records?")) {
+        localStorage.removeItem(STORAGE_KEY);
+        render();
+      }
+    };
+
+    window.exportToCSV = function() {
+      const expenses = loadExpenses();
+      if (expenses.length === 0) {
+        alert("No data available to export.");
+        return;
+      }
+
+      let csvContent = "data:text/csv;charset=utf-8,Date,Category,Amount,Payment Method,Note\r\n";
+      expenses.forEach(e => {
+        const cleanNote = (e.note || "").replace(/"/g, '""');
+        csvContent += `"${e.date}","${e.category}",${e.amount},"${e.payment}","${cleanNote}"\r\n`;
+      });
+
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `expenses_export_${today.toISOString().split("T")[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    };
+
+    // Initial load
+    render();
+  </script>
+</body>
+</html>
