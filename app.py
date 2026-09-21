@@ -252,9 +252,13 @@ st.divider()
 # -------------------------------------------------------------
 # Main Navigation Tabs
 # -------------------------------------------------------------
-tab_add, tab_trips, tab_parser, tab_manage = st.tabs(
-    ["➕ Manual Log", "✈️ Trip Aggregator", "📥 Bank / SMS Parser", "📋 History"]
-)
+tab_add, tab_trips, tab_parser, tab_screenshot, tab_manage = st.tabs([
+    "➕ Manual Log",
+    "✈️ Trip Aggregator",
+    "📥 SMS Parser",
+    "📸 Screenshot Parser",
+    "📋 History",
+])
 
 # --- TAB 1: Manual Log ---
 with tab_add:
