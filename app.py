@@ -13,7 +13,7 @@ CATEGORIES = {
         "Bus Fare",
         "Auto to Station/Airport",
         "Cab/Taxi",
-        "Other Travel",
+        "Souvenirs for home",
     ],
     "Office Commute": [
         "Auto Fare",
