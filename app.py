@@ -542,6 +542,261 @@ with tab_parser:
       st.success(f"Saved ₹{p_amt:.2f} under {p_cat} → {p_sub}!")
       st.rerun()
 
+from PIL import Image
+import pytesseract
+
+# --- TAB: Statement / History Screenshot Parser ---
+with tab_screenshot:
+  st.subheader("📸 Scan Payment History List")
+  st.caption(
+      "Upload a screenshot of your Paytm, PhonePe, or GPay transaction history"
+      " list."
+  )
+
+  uploaded_img = st.file_uploader(
+      "Choose History Screenshot", type=["png", "jpg", "jpeg"]
+  )
+
+  if uploaded_img is not None:
+    image = Image.open(uploaded_img)
+    st.image(image, caption="History Screenshot", width=320)
+
+    if st.button("🔍 Extract All Transactions", type="primary"):
+      with st.spinner("Scanning all entries..."):
+        # Extract full raw text preserving line blocks
+        raw_text = pytesseract.image_to_string(image)
+        lines = [line.strip() for line in raw_text.split("\n") if line.strip()]
+
+        detected_rows = []
+
+        # Common noise words in UPI history lists to ignore
+        noise = [
+            "PAYMENT HISTORY",
+            "TRANSACTIONS",
+            "BALANCE",
+            "SEARCH",
+            "PAID SECURELY",
+            "SUCCESSFUL",
+            "DEBITED FROM",
+            "WALLET",
+            "FILTER",
+            "ALL",
+            "BANK",
+            "ACCOUNT",
+            "UPI",
+        ]
+
+        # Scan line by line to pair merchants with amounts
+        for i, line in enumerate(lines):
+          # Skip received money (+ sign or Received)
+          if "+" in line or "RECEIVED" in line.upper():
+            continue
+
+          # Match amount patterns like ₹150, Rs 50.00, - 250, 45.00
+          amt_match = re.search(
+              r"(?:[-−₹]|Rs\.?)\s*([\d,]+(?:\.\d{1,2})?)", line, re.IGNORECASE
+          )
+          if not amt_match:
+            # Check for standalone numbers at the end of a line (e.g., "50.00")
+            amt_match = re.search(r"\b([\d,]+\.\d{2})\b", line)
+
+          if amt_match:
+            try:
+              val = float(amt_match.group(1).replace(",", ""))
+              # Filter out likely non-amount numbers (years, phone fragments)
+              if val <= 0 or val > 200000 or val in [2024, 2025, 2026]:
+                continue
+            except Exception:
+              continue
+
+            # Look backwards 1 to 3 lines to find the merchant name
+            merchant_candidate = "UPI Payment"
+            for offset in [1, 2, 3]:
+              if i - offset >= 0:
+                prev_line = lines[i - offset].strip()
+                prev_clean = re.sub(
+                    r"(?i)(paid to|to:|transfer to|sent to)", "", prev_line
+                ).strip()
+
+                # Verify it's not another amount, date, or app UI noise
+                if (
+                    len(prev_clean) > 2
+                    and not re.search(r"\d{3,}", prev_clean)
+                    and not any(n in prev_clean.upper() for n in noise)
+                ):
+                  merchant_candidate = prev_clean
+                  break
+
+            # If the amount was on the same line as the name
+            inline_name = re.sub(
+                r"(?:[-−₹]|Rs\.?)\s*[\d,]+(?:\.\d{1,2})?", "", line
+            ).strip()
+            if len(inline_name) > 3 and not any(
+                n in inline_name.upper() for n in noise
+            ):
+              merchant_candidate = inline_name
+
+            # Check for dates nearby (e.g., "19 Sep", "Yesterday", "20 Sep 2026")
+            entry_date = today
+            date_snippet = " ".join(lines[max(0, i - 2) : min(len(lines), i + 3)])
+            dt_match = re.search(
+                r"\b(\d{1,2}\s+[A-Za-z]{3}(?:\s+\d{2,4})?)\b", date_snippet
+            )
+            if dt_match:
+              try:
+                date_str = dt_match.group(1)
+                if len(date_str.split()) == 2:
+                  date_str += f" {today.year}"
+                entry_date = pd.to_datetime(date_str).date()
+              except Exception:
+                entry_date = today
+
+            # Auto Category Assignment
+            m_upper = merchant_candidate.upper()
+            if any(
+                k in m_upper
+                for k in [
+                    "CHAI",
+                    "TEA",
+                    "COFFEE",
+                    "SNAC",
+                    "CAFE",
+                    "BAKERY",
+                    "SWEETS",
+                ]
+            ):
+              cat, sub = (
+                  "Chai & Snacks",
+                  "Evening Snacks" if "SNAC" in m_upper else "Tea / Chai",
+              )
+            elif any(
+                k in m_upper
+                for k in [
+                    "SWIGGY",
+                    "ZOMATO",
+                    "FOOD",
+                    "RESTAURANT",
+                    "HOTEL",
+                    "BHOJAN",
+                    "MESS",
+                ]
+            ):
+              cat, sub = (
+                  "Meals & Dining",
+                  (
+                      "Swiggy / Zomato Order"
+                      if "SWIGGY" in m_upper or "ZOMATO" in m_upper
+                      else "Lunch"
+                  ),
+              )
+            elif any(
+                k in m_upper
+                for k in [
+                    "IRCTC",
+                    "TRAIN",
+                    "RAILWAY",
+                    "MAKEMYTRIP",
+                    "BUS",
+                    "FLIGHT",
+                ]
+            ):
+              cat, sub = "Home Travel", "Train Fare"
+            elif any(
+                k in m_upper for k in ["UBER", "OLA", "RAPIDO", "METRO", "AUTO"]
+            ):
+              cat, sub = (
+                  "Office Commute",
+                  "Metro Fare" if "METRO" in m_upper else "Auto Fare",
+              )
+            elif any(
+                k in m_upper
+                for k in ["BLINKIT", "ZEPTO", "INSTAMART", "BIGBASKET", "MART"]
+            ):
+              cat, sub = "Groceries", "Supermarket"
+            else:
+              cat, sub = "Shopping & Misc", "Miscellaneous"
+
+            detected_rows.append({
+                "Date": entry_date,
+                "Category": cat,
+                "Sub-Category": sub,
+                "Amount": val,
+                "Payment": "UPI",
+                "Trip": "None",
+                "Note": merchant_candidate,
+            })
+
+        if detected_rows:
+          # Convert to DataFrame for review
+          parsed_df = pd.DataFrame(detected_rows).drop_duplicates(
+              subset=["Amount", "Note"]
+          )
+          st.session_state["bulk_parsed_df"] = parsed_df
+          st.success(f"Found {len(parsed_df)} debit transactions!")
+        else:
+          st.warning(
+              "No outgoing debit payments detected. Ensure the screenshot is"
+              " sharp and text is legible."
+          )
+
+  # Review and bulk save editable table
+  if "bulk_parsed_df" in st.session_state:
+    st.markdown("##### ✏️ Review & Edit Before Saving")
+    st.caption(
+        "You can modify amounts, change categories, or uncheck items you don't"
+        " want to log."
+    )
+
+    edited_df = st.data_editor(
+        st.session_state["bulk_parsed_df"],
+        num_rows="dynamic",
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    col_save, col_cancel = st.columns(2)
+    with col_save:
+      if st.button("💾 Save All Extracted to Tracker", type="primary"):
+        df_master = load_data()
+        next_id = (
+            int(df_master["ID"].max() + 1)
+            if not df_master.empty and "ID" in df_master.columns
+            else 1
+        )
+
+        rows_to_add = []
+        for _, row in edited_df.iterrows():
+          rows_to_add.append({
+              "ID": next_id,
+              "Date": row["Date"],
+              "Category": row["Category"],
+              "Sub-Category": row["Sub-Category"],
+              "Amount": float(row["Amount"]),
+              "Payment": row["Payment"],
+              "Trip": row.get("Trip", "None"),
+              "Note": str(row["Note"]),
+          })
+          next_id += 1
+
+        new_entries_df = pd.DataFrame(rows_to_add)
+        updated_master = pd.concat(
+            [df_master, new_entries_df], ignore_index=True
+        )
+        save_data(updated_master)
+
+        del st.session_state["bulk_parsed_df"]
+        st.success(
+            f"Successfully added {len(rows_to_add)} transactions to your"
+            " database!"
+        )
+        st.rerun()
+
+    with col_cancel:
+      if st.button("Discard"):
+        del st.session_state["bulk_parsed_df"]
+        st.rerun()
+                    
+
 # --- TAB 4: History & Data Management ---
 with tab_manage:
   if not df.empty:
