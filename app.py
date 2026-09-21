@@ -332,52 +332,159 @@ with tab_trips:
   else:
     st.info("No records available yet.")
 
-# --- TAB 3: Automated SMS / Bank Text Parser ---
+# # --- TAB 3: Automated SMS / Bank Text Parser ---
 with tab_parser:
   st.subheader("📥 Paste SMS or Bank Narration")
   st.caption(
-      "Paste any bank SMS (HDFC, SBI, ICICI, etc.) to extract amount and vendor"
-      " automatically."
+      "Paste any bank SMS (SBI, HDFC, ICICI, etc.) to extract amount, vendor,"
+      " and category automatically."
   )
 
   sms_text = st.text_area(
       "Paste SMS Text",
-      placeholder="e.g., Sent Rs. 180.00 from HDFC Bank to SWIGGY via UPI on 21-Sep-26...",
-      height=80,
+      placeholder=(
+          "Dear UPI user A/C X9343 debited by 50.00 on date 19Sep26 trf to JAY"
+          " MALHAR SNACS..."
+      ),
+      height=90,
   )
 
   if st.button("Parse SMS Text"):
     if sms_text:
-      # Regex pattern for Indian Bank SMS debits
+      # 1. Amount Extraction (handles "debited by 50.00", "Rs. 50", "INR 50", "paid 50.00")
       amt_match = re.search(
-          r"(?:Rs\.?|INR)\s*([\d,]+(?:\.\d{1,2})?)", sms_text, re.IGNORECASE
+          r"(?:debited\s+by|Rs\.?|INR|paid)\s*[:\s]?\s*([\d,]+(?:\.\d{1,2})?)",
+          sms_text,
+          re.IGNORECASE,
       )
+
+      # 2. Merchant / Receiver Extraction (handles "trf to ...", "to ...", "VPA ...")
+      vendor_match = re.search(
+          r"(?:trf\s+to|transferred\s+to|paid\s+to|to)\s+([A-Za-z0-9\s&]+?)(?=\s+(?:Refno|Ref|UPI|on|avl|bal|If|call)|$)",
+          sms_text,
+          re.IGNORECASE,
+      )
+
+      # 3. Date Extraction (e.g., "19Sep26" or "19-09-2026")
+      parsed_date = today
+      date_match = re.search(
+          r"\b(\d{1,2}[A-Za-z]{3}\d{2,4})\b", sms_text, re.IGNORECASE
+      )
+      if date_match:
+        try:
+          parsed_date = pd.to_datetime(
+              date_match.group(1), format="%d%b%y"
+          ).date()
+        except Exception:
+          try:
+            parsed_date = pd.to_datetime(date_match.group(1)).date()
+          except Exception:
+            parsed_date = today
+
       if amt_match:
         parsed_amt = float(amt_match.group(1).replace(",", ""))
-        st.session_state["parsed_amt"] = parsed_amt
+        vendor_name = (
+            vendor_match.group(1).strip()
+            if vendor_match
+            else "Unknown Merchant"
+        )
 
-        # Guess category based on keywords
+        st.session_state["parsed_amt"] = parsed_amt
+        st.session_state["parsed_date"] = parsed_date
+        st.session_state["parsed_note"] = vendor_name
+
+        # Smart Categorization Rules
         sms_upper = sms_text.upper()
         if any(
             k in sms_upper
-            for k in ["SWIGGY", "ZOMATO", "FOOD", "RESTAURANT", "CAFE"]
+            for k in [
+                "SNAC",
+                "SNACK",
+                "TEA",
+                "CHAI",
+                "COFFEE",
+                "CAFE",
+                "BAKERY",
+                "SWEETS",
+            ]
         ):
-          st.session_state["parsed_cat"] = "Meals & Dining"
-          st.session_state["parsed_sub"] = "Swiggy / Zomato Order"
+          st.session_state["parsed_cat"] = "Chai & Snacks"
+          st.session_state["parsed_sub"] = (
+              "Evening Snacks"
+              if "SNAC" in sms_upper
+              else (
+                  "Tea / Chai"
+                  if "TEA" in sms_upper or "CHAI" in sms_upper
+                  else "Coffee"
+              )
+          )
         elif any(
             k in sms_upper
-            for k in ["IRCTC", "TRAIN", "RAILWAY", "MAKEMYTRIP", "FLIGHT"]
+            for k in [
+                "SWIGGY",
+                "ZOMATO",
+                "FOOD",
+                "RESTAURANT",
+                "HOTEL",
+                "BHOJANALAYA",
+                "DHABA",
+                "MESS",
+            ]
+        ):
+          st.session_state["parsed_cat"] = "Meals & Dining"
+          st.session_state["parsed_sub"] = (
+              "Swiggy / Zomato Order"
+              if ("SWIGGY" in sms_upper or "ZOMATO" in sms_upper)
+              else "Dining Out"
+          )
+        elif any(
+            k in sms_upper
+            for k in [
+                "IRCTC",
+                "TRAIN",
+                "RAILWAY",
+                "MAKEMYTRIP",
+                "FLIGHT",
+                "AIRWAYS",
+                "BUS",
+                "REDBUS",
+            ]
         ):
           st.session_state["parsed_cat"] = "Home Travel"
-          st.session_state["parsed_sub"] = "Train Fare"
-        elif any(k in sms_upper for k in ["UBER", "OLA", "RAPIDO", "METRO"]):
+          st.session_state["parsed_sub"] = (
+              "Train Fare"
+              if "TRAIN" in sms_upper or "IRCTC" in sms_upper
+              else "Bus Fare"
+          )
+        elif any(
+            k in sms_upper
+            for k in ["UBER", "OLA", "RAPIDO", "METRO", "NSRC", "AUTO"]
+        ):
           st.session_state["parsed_cat"] = "Office Commute"
-          st.session_state["parsed_sub"] = "Auto Fare"
+          st.session_state["parsed_sub"] = (
+              "Metro Fare" if "METRO" in sms_upper else "Auto Fare"
+          )
+        elif any(
+            k in sms_upper
+            for k in [
+                "BLINKIT",
+                "ZEPTO",
+                "INSTAMART",
+                "BIGBASKET",
+                "GROCERY",
+                "SUPERMARKET",
+                "PROVISION",
+            ]
+        ):
+          st.session_state["parsed_cat"] = "Groceries"
+          st.session_state["parsed_sub"] = "Supermarket"
         else:
           st.session_state["parsed_cat"] = "Shopping & Misc"
           st.session_state["parsed_sub"] = "Miscellaneous"
 
-        st.success(f"Detected Amount: ₹{parsed_amt}")
+        st.success(
+            f"Detected: ₹{parsed_amt:,.2f} to '{vendor_name}' on {parsed_date}"
+        )
       else:
         st.error("Could not detect transaction amount from text.")
 
@@ -385,28 +492,54 @@ with tab_parser:
     st.write("Confirm Parsed Transaction:")
     p_col1, p_col2 = st.columns(2)
     p_amt = p_col1.number_input(
-        "Amount", value=st.session_state.get("parsed_amt", 0.0)
+        "Amount (₹)", value=st.session_state.get("parsed_amt", 0.0)
     )
     p_cat = p_col2.selectbox(
         "Category",
         list(CATEGORIES.keys()),
         index=list(CATEGORIES.keys()).index(
-            st.session_state.get("parsed_cat", "Shopping & Misc")
+            st.session_state.get("parsed_cat", "Chai & Snacks")
         ),
+        key="parsed_cat_select",
     )
-    p_sub = st.selectbox("Sub-Type", CATEGORIES[p_cat])
 
-    if st.button("➕ Confirm & Save Parsed Entry", type="primary"):
+    p_col3, p_col4 = st.columns(2)
+    p_sub = p_col3.selectbox(
+        "Sub-Type", CATEGORIES[p_cat], key="parsed_sub_select"
+    )
+    p_date = p_col4.date_input(
+        "Date", value=st.session_state.get("parsed_date", today)
+    )
+
+    p_col5, p_col6 = st.columns(2)
+    p_mode = p_col5.selectbox(
+        "Mode",
+        ["UPI", "Card", "Cash", "Net Banking"],
+        index=0,
+        key="parsed_mode_select",
+    )
+    p_note = p_col6.text_input(
+        "Note",
+        value=st.session_state.get("parsed_note", ""),
+        key="parsed_note_input",
+    )
+
+    if st.button(
+        "➕ Confirm & Save Parsed Entry",
+        type="primary",
+        use_container_width=True,
+    ):
       append_entry(
           p_amt,
           p_cat,
           p_sub,
-          "UPI",
-          today,
-          note=f"Parsed: {sms_text[:30]}...",
+          p_mode,
+          p_date,
+          trip="None",
+          note=p_note,
       )
       del st.session_state["parsed_amt"]
-      st.success("Entry added!")
+      st.success(f"Saved ₹{p_amt:.2f} under {p_cat} → {p_sub}!")
       st.rerun()
 
 # --- TAB 4: History & Data Management ---
