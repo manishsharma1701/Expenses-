@@ -53,6 +53,12 @@ CATEGORIES = {
         "Personal Care",
         "Miscellaneous",
     ],
+    "home expenses": [
+        "Clothing / Shoes",
+        "Electronics",
+        "Personal Care",
+        "Miscellaneous",
+    ],
 }
 
 TRIP_TAGS = [
